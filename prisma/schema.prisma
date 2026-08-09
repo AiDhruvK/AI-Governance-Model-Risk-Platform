@@ -1,0 +1,400 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EXECUTIVE
+  AI_GOVERNANCE_MANAGER
+  BUSINESS_OWNER
+  TECHNICAL_OWNER
+  RISK_COMPLIANCE
+  AUDITOR
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ProductionStatus {
+  CONCEPT
+  DEVELOPMENT
+  PILOT
+  PRODUCTION
+  RETIRED
+}
+
+enum GovernanceStatus {
+  DRAFT
+  PENDING_REVIEW
+  IN_ASSESSMENT
+  APPROVED
+  CONDITIONAL
+  REJECTED
+  UNDER_MONITORING
+}
+
+enum DataSensitivity {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  RESTRICTED
+}
+
+enum ControlStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+}
+
+enum ControlEffectiveness {
+  EFFECTIVE
+  PARTIALLY_EFFECTIVE
+  INEFFECTIVE
+  NOT_APPLICABLE
+  NOT_TESTED
+}
+
+enum TestResult {
+  PASSED
+  PASSED_WITH_CONDITIONS
+  FAILED
+}
+
+enum IssueSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING_VALIDATION
+  CLOSED
+}
+
+enum ApprovalStage {
+  BUSINESS_OWNER_REVIEW
+  TECHNICAL_REVIEW
+  AI_RISK_REVIEW
+  PRIVACY_REVIEW
+  SECURITY_REVIEW
+  LEGAL_COMPLIANCE_REVIEW
+  FINAL_GOVERNANCE_APPROVAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+enum AssessmentStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+model BusinessUnit {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  code        String     @unique
+  description String?
+  users       User[]
+  aiSystems   AISystem[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model User {
+  id             String        @id @default(cuid())
+  email          String        @unique
+  name           String
+  title          String?
+  role           UserRole
+  businessUnitId String?
+  businessUnit   BusinessUnit? @relation(fields: [businessUnitId], references: [id])
+  active         Boolean       @default(true)
+
+  businessOwnedSystems  AISystem[]            @relation("BusinessOwner")
+  technicalOwnedSystems AISystem[]            @relation("TechnicalOwner")
+  assessmentsLed        RiskAssessment[]      @relation("AssessmentLead")
+  controlOwned          Control[]             @relation("ControlOwner")
+  controlAssessments    AIControlAssessment[] @relation("ControlTester")
+  testsPerformed        Test[]                @relation("Tester")
+  issuesOwned           Issue[]               @relation("IssueOwner")
+  approvals             Approval[]            @relation("Approver")
+  auditEvents           AuditEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AIType {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  aiSystems   AISystem[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model RiskCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  weight      Float    @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AssessmentQuestion {
+  id           String   @id @default(cuid())
+  section      String
+  question     String
+  weight       Int      @default(5)
+  helpText     String?
+  sortOrder    Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  responses    AssessmentResponse[]
+}
+
+model AISystem {
+  id                String           @id @default(cuid())
+  systemId          String           @unique
+  name              String
+  description       String
+  businessPurpose   String
+  businessImpact    String
+  users             String
+  deploymentEnv     String
+  modelProvider     String
+  dataSources       String
+  downstreamSystems String
+  aiTypeId          String
+  aiType            AIType           @relation(fields: [aiTypeId], references: [id])
+  businessUnitId    String
+  businessUnit      BusinessUnit     @relation(fields: [businessUnitId], references: [id])
+  businessOwnerId   String
+  businessOwner     User             @relation("BusinessOwner", fields: [businessOwnerId], references: [id])
+  technicalOwnerId  String
+  technicalOwner    User             @relation("TechnicalOwner", fields: [technicalOwnerId], references: [id])
+  riskLevel         RiskLevel        @default(MEDIUM)
+  customerFacing    Boolean          @default(false)
+  dataSensitivity   DataSensitivity  @default(INTERNAL)
+  productionStatus  ProductionStatus @default(DEVELOPMENT)
+  governanceStatus  GovernanceStatus @default(DRAFT)
+  lastAssessmentAt  DateTime?
+  nextReviewAt      DateTime?
+  governanceScore   Int              @default(0)
+  documentationPct  Int              @default(0)
+  controlsPct       Int              @default(0)
+  testingPct        Int              @default(0)
+  approvalsPct      Int              @default(0)
+  issueMgmtPct      Int              @default(0)
+
+  assessments        RiskAssessment[]
+  controlAssessments AIControlAssessment[]
+  tests              Test[]
+  issues             Issue[]
+  approvals          Approval[]
+  auditEvents        AuditEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([riskLevel])
+  @@index([businessUnitId])
+  @@index([governanceStatus])
+  @@index([productionStatus])
+}
+
+model RiskAssessment {
+  id           String           @id @default(cuid())
+  aiSystemId   String
+  aiSystem     AISystem         @relation(fields: [aiSystemId], references: [id], onDelete: Cascade)
+  status       AssessmentStatus @default(NOT_STARTED)
+  overallScore Int              @default(0)
+  riskLevel    RiskLevel        @default(LOW)
+  leadId       String?
+  lead         User?            @relation("AssessmentLead", fields: [leadId], references: [id])
+  dueDate      DateTime?
+  completedAt  DateTime?
+  summary      String?
+  factorNotes  String?
+
+  privacyScore         Int @default(0)
+  securityScore        Int @default(0)
+  biasScore            Int @default(0)
+  explainabilityScore  Int @default(0)
+  reliabilityScore     Int @default(0)
+  regulatoryScore      Int @default(0)
+  humanOversightScore  Int @default(0)
+  dataQualityScore     Int @default(0)
+  thirdPartyScore      Int @default(0)
+  reputationalScore    Int @default(0)
+
+  privacyComment         String?
+  securityComment        String?
+  biasComment            String?
+  explainabilityComment  String?
+  reliabilityComment     String?
+  regulatoryComment      String?
+  humanOversightComment  String?
+  dataQualityComment     String?
+  thirdPartyComment      String?
+  reputationalComment    String?
+
+  responses AssessmentResponse[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([aiSystemId])
+  @@index([status])
+}
+
+model AssessmentResponse {
+  id             String             @id @default(cuid())
+  assessmentId   String
+  assessment     RiskAssessment     @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       AssessmentQuestion @relation(fields: [questionId], references: [id])
+  answer         Boolean
+  comments       String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([assessmentId, questionId])
+}
+
+model Control {
+  id                  String        @id @default(cuid())
+  controlId           String        @unique
+  name                String
+  description         String
+  requirement         String
+  ownerId             String?
+  owner               User?         @relation("ControlOwner", fields: [ownerId], references: [id])
+  applicableRiskLevel RiskLevel
+  testingFrequency    String
+  status              ControlStatus @default(ACTIVE)
+  assessments         AIControlAssessment[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model AIControlAssessment {
+  id                String              @id @default(cuid())
+  aiSystemId        String
+  aiSystem          AISystem            @relation(fields: [aiSystemId], references: [id], onDelete: Cascade)
+  controlId         String
+  control           Control             @relation(fields: [controlId], references: [id])
+  effectiveness     ControlEffectiveness @default(NOT_TESTED)
+  testerId          String?
+  tester            User?               @relation("ControlTester", fields: [testerId], references: [id])
+  testDate          DateTime?
+  evidence          String?
+  comments          String?
+  remediationAction String?
+  nextTestingDate   DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([aiSystemId, controlId])
+  @@index([effectiveness])
+}
+
+model Test {
+  id         String     @id @default(cuid())
+  testId     String     @unique
+  aiSystemId String
+  aiSystem   AISystem   @relation(fields: [aiSystemId], references: [id], onDelete: Cascade)
+  testType   String
+  testerId   String?
+  tester     User?      @relation("Tester", fields: [testerId], references: [id])
+  testDate   DateTime
+  result     TestResult
+  score      Int?
+  evidence   String?
+  comments   String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([aiSystemId])
+  @@index([testType])
+}
+
+model Issue {
+  id               String        @id @default(cuid())
+  issueId          String        @unique
+  aiSystemId       String
+  aiSystem         AISystem      @relation(fields: [aiSystemId], references: [id], onDelete: Cascade)
+  title            String
+  description      String
+  severity         IssueSeverity
+  category         String
+  ownerId          String?
+  owner            User?         @relation("IssueOwner", fields: [ownerId], references: [id])
+  dateIdentified   DateTime
+  dueDate          DateTime
+  status           IssueStatus   @default(OPEN)
+  remediationPlan  String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([status])
+  @@index([severity])
+  @@index([aiSystemId])
+}
+
+model Approval {
+  id         String         @id @default(cuid())
+  aiSystemId String
+  aiSystem   AISystem       @relation(fields: [aiSystemId], references: [id], onDelete: Cascade)
+  stage      ApprovalStage
+  reviewerId String?
+  reviewer   User?          @relation("Approver", fields: [reviewerId], references: [id])
+  status     ApprovalStatus @default(PENDING)
+  reviewDate DateTime?
+  comments   String?
+  sortOrder  Int            @default(0)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([aiSystemId, stage])
+  @@index([status])
+}
+
+model AuditEvent {
+  id         String    @id @default(cuid())
+  aiSystemId String?
+  aiSystem   AISystem? @relation(fields: [aiSystemId], references: [id], onDelete: SetNull)
+  actorId    String?
+  actor      User?     @relation(fields: [actorId], references: [id])
+  action     String
+  details    String
+  createdAt  DateTime  @default(now())
+
+  @@index([aiSystemId])
+  @@index([createdAt])
+}
+
+model ComplianceTrend {
+  id         String   @id @default(cuid())
+  month      String   @unique
+  percentage Float
+  createdAt  DateTime @default(now())
+}
