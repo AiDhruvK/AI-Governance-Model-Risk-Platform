@@ -4,25 +4,34 @@ import { Menu, Search, Bell } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { UserRole } from "@prisma/client";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 
 const roles = Object.keys(ROLE_LABELS) as UserRole[];
 
 export function AppHeader({
   currentRole,
   userName,
+  menuOpen,
   onMenuClick,
 }: {
   currentRole: UserRole;
   userName: string;
-  onMenuClick?: () => void;
+  menuOpen: boolean;
+  onMenuClick: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [searchQuery, setSearchQuery] = useState("");
 
   function switchRole(role: string) {
     document.cookie = `aigov_role=${role}; path=/; max-age=31536000`;
     startTransition(() => router.refresh());
+  }
+
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = searchQuery.trim();
+    router.push(query ? `/inventory?q=${encodeURIComponent(query)}` : "/inventory");
   }
 
   return (
@@ -30,25 +39,33 @@ export function AppHeader({
       <button
         type="button"
         onClick={onMenuClick}
-        className="rounded-md border border-slate-200 p-1.5 text-slate-600 lg:hidden"
-        aria-label="Open navigation"
+        className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 lg:hidden"
+        aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+        aria-expanded={menuOpen}
+        aria-controls="platform-navigation"
       >
-        <Menu className="h-4 w-4" />
+        <Menu className="h-5 w-5" />
       </button>
 
-      <div className="relative hidden min-w-0 flex-1 md:block">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <input
-          placeholder="Search AI systems, issues, controls..."
-          className="w-full max-w-xl rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-9 pr-3 text-sm outline-none focus:border-teal-700 focus:bg-white focus:ring-1 focus:ring-teal-700"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              const value = (e.target as HTMLInputElement).value;
-              router.push(`/inventory?q=${encodeURIComponent(value)}`);
-            }
-          }}
-        />
-      </div>
+      <form onSubmit={submitSearch} className="hidden min-w-0 flex-1 md:block" role="search">
+        <div className="relative max-w-xl">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search AI systems, issues, controls..."
+            aria-label="Search AI systems, issues, and controls"
+            className="w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-10 text-sm outline-none focus:border-teal-700 focus:bg-white focus:ring-1 focus:ring-teal-700"
+          />
+          <button
+            type="submit"
+            aria-label="Submit search"
+            className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        </div>
+      </form>
 
       <div className={`ml-auto flex items-center gap-3 ${pending ? "opacity-70" : ""}`}>
         <button type="button" className="rounded-md border border-slate-200 p-1.5 text-slate-500" aria-label="Notifications">
